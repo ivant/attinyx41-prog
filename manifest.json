@@ -1,0 +1,31 @@
+{
+  "manifest_version": 2,
+  "name": "ATtinyX41 programmer",
+  "short_name": "attinyX41-prog",
+  "description": "ATtiny441/841 SPI programmer based on SI CP2130 chip",
+  "version": "0.0.1",
+  "minimum_chrome_version": "46",
+
+  "icons": {
+    "16": "assets/icon_16.png",
+    "128": "assets/icon_128.png"
+  },
+
+  "app": {
+    "background": {
+      "scripts": ["background.js"]
+    }
+  },
+
+  "permissions": [
+    "usb",
+    {
+      "usbDevices": [
+        {
+          "vendorId": 4292,
+          "productId": 34720
+        }
+      ] 
+    }
+  ]
+}

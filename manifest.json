@@ -18,6 +18,7 @@
   },
 
   "permissions": [
+    "fileSystem",
     "usb",
     {
       "usbDevices": [

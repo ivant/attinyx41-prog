@@ -129,7 +129,21 @@ function onDeviceFound(devices) {
 }
 
 function UploadSREC(clickEvent) {
-  SetupSPIChannel(deviceHandle, 0, SPIWriteSomething);
+  chrome.fileSystem.chooseEntry({}, function(entry) {
+    entry.file(function(file) {
+      var reader = new FileReader();
+      reader.onloadend = function(e) {
+        SetupSPIChannel(deviceHandle, 0, SPIWriteSomething);
+        SPIWrite(deviceHandle, new Uint8Array(reader.result), function(transferResult) {
+          if (chrome.runtime.lastError !== undefined) {
+            showError('SPIWrite error: ' + chrome.runtime.lastError.message);
+            return;
+          }
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  });
 }
 
 window.onload = function() {

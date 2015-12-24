@@ -2,6 +2,17 @@
 //
 // See "AN792: CP2130 Interface Specification" for details.
 
+function IsCP2130Device(device) {
+  return device.vendorId == 0x10c4 && device.productId == 0x87a0;
+}
+
+function GetCP2130DeviceFilter() {
+  return {
+    'vendorId': 0x10c4,
+    'productId': 0x87a0
+  };
+}
+
 function ControlIn(handle, request, length, onTransferResult) {
   chrome.usb.controlTransfer(handle, {
     'direction': 'in',

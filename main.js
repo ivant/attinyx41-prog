@@ -1,6 +1,6 @@
 var deviceDiv;
 var errorDiv;
-var selectDeviceButton;
+var uploadButton;
 
 var deviceHandle;
 var interfaceClaimed = false;
@@ -86,16 +86,44 @@ function OpenUSBDevice(device, continuation) {
   });
 }
 
-function onDeviceSelected(devices) {
+function onDeviceAddedSingleShotHandler(device) {
+  if (IsCP2130Device(device)) {
+    showError('');
+    chrome.usb.onDeviceAdded.removeListener(onDeviceAddedSingleShotHandler);
+    onDeviceFound([device]);
+  }
+}
+
+function onDeviceRemovedSingleShotHandler(device) {
+  if (IsCP2130Device(device)) {
+    showError('');
+    chrome.usb.onDeviceRemoved.removeListener(onDeviceRemovedSingleShotHandler);
+    FindUsbSpiDevice();
+  }
+}
+
+function FindUsbSpiDevice() {
+  chrome.usb.getDevices({
+    'filters': [GetCP2130DeviceFilter()]
+  }, onDeviceFound);
+}
+
+function onDeviceFound(devices) {
   if (chrome.runtime.lastError !== undefined) {
-    showError('chrome.usb.getUserSelectedDevices error: ' +
-              chrome.runtime.lastError.message);
+    showError('Chrome error: ' + chrome.runtime.lastError.message);
     return;
   }
-  if (devices.length != 1) {
-    showError('Got ' + devices.length + ' devices from chrome.usb.getUserSelectedDevices');
+
+  if (devices.length === 0) {
+    showError('USB-SPI device not found. Please plug one in to continue.');
+    chrome.usb.onDeviceAdded.addListener(onDeviceAddedSingleShotHandler);
+    return;
+  } else if (devices.length > 1) {
+    showError('Got ' + devices.length + ' USB-SPI devices. Please remove all but one.');
+    chrome.usb.onDeviceRemoved.addListener(onDeviceRemovedSingleShotHandler);
     return;
   }
+
   OpenUSBDevice(devices[0], function(handle) {
     deviceHandle = handle;
     SetupSPIChannel(handle, 0, SPIWriteInCycle);
@@ -105,20 +133,16 @@ function onDeviceSelected(devices) {
 window.onload = function() {
   deviceDiv = document.getElementById('device');
   errorDiv = document.getElementById('error');
-  selectDeviceButton = document.getElementById('select-device');
+  uploadButton = document.getElementById('upload');
+
+  FindUsbSpiDevice();
+
+  /*
   selectDeviceButton.addEventListener('click', function(event) {
-    chrome.usb.getDevices({
-      'vendorId': 0x10c4,
-      'productId': 0x87a0
-    }, onDeviceSelected);
-    /*
     chrome.usb.getUserSelectedDevices({
       'multiple': false,
-      'filters': [{
-        'vendorId': 0x10c4,
-        'productId': 0x87a0
-      }]
-    }, onDeviceSelected);
-    */
+      'filters': [GetCP2130DeviceFilter()]
+    }, onDeviceFound);
   });
+  */
 };

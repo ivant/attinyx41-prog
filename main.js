@@ -25,15 +25,13 @@ function showError(error) {
   errorDiv.style['display'] = 'block';
 }
 
-function SPIWriteInCycle() {
+function SPIWriteSomething() {
   var data = Uint8Array.of(0x8c, 0xef, 0x13, 0x7f);
   SPIWrite(deviceHandle, data, function(transferResult) {
     if (chrome.runtime.lastError !== undefined) {
-      showError('chrome.usb.controlTransfer error: ' +
-                chrome.runtime.lastError.message);
+      showError('SPIWrite error: ' + chrome.runtime.lastError.message);
       return;
     }
-    setTimeout(SPIWriteInCycle, 50);
   });
 }
 
@@ -126,14 +124,20 @@ function onDeviceFound(devices) {
 
   OpenUSBDevice(devices[0], function(handle) {
     deviceHandle = handle;
-    SetupSPIChannel(handle, 0, SPIWriteInCycle);
+    uploadButton.disabled = false;
   });
+}
+
+function UploadSREC(clickEvent) {
+  SetupSPIChannel(deviceHandle, 0, SPIWriteSomething);
 }
 
 window.onload = function() {
   deviceDiv = document.getElementById('device');
   errorDiv = document.getElementById('error');
   uploadButton = document.getElementById('upload');
+  uploadButton.disabled = true;
+  uploadButton.addEventListener('click', UploadSREC);
 
   FindUsbSpiDevice();
 

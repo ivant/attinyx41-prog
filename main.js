@@ -142,7 +142,7 @@ function UploadSREC(clickEvent) {
         SetupSPIChannel(deviceHandle, 0, SPIWriteSomething);
 
         // For now, as a test, just write out the first record.
-        SPIWrite(deviceHandle, new Uint8Array(srec['records'][0]['data']), function(transferResult) {
+        SPIWriteRead(deviceHandle, new Uint8Array(srec['records'][0]['data']), function(transferResult) {
           if (chrome.runtime.lastError !== undefined) {
             showError('SPIWrite error: ' + chrome.runtime.lastError.message);
             return;

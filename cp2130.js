@@ -88,3 +88,26 @@ function SPIWrite(handle, data, onTransferResult) {
     'data': buf
   }, onTransferResult);
 }
+
+function SPIWriteRead(handle, data, onWriteReadResult) {
+  var buf = new ArrayBuffer(data.length + 8);
+  var bufView = new Uint8Array(buf);
+  bufView.set(Uint8Array.of(0x00, 0x00, 0x02, 0x00), 0);
+  bufView.set(Uint32Array.of(data.length), 4);  // little-endian
+  bufView.set(data, 8);
+  chrome.usb.bulkTransfer(handle, {
+    'direction': 'out',
+    'endpoint': 1,
+    'data': buf
+  }, function(result) {
+    if (result.resultCode !== 0) {
+      onWriteReadResult(result);
+      return;
+    }
+    chrome.usb.bulkTransfer(handle, {
+      'direction': 'in',
+      'endpoint': 2,
+      'length': data.length
+    }, onWriteReadResult);
+  });
+}

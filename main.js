@@ -21,8 +21,8 @@ chrome.app.window.onClosed.addListener(function() {
 });
 
 function showError(error) {
-  errorDiv.textContent = error;
-  errorDiv.style['display'] = 'block';
+  if (error) console.error(error);
+  if (error !== undefined) errorDiv.textContent = error;
 }
 
 function SetGPIOValuesInCycle() {

@@ -80,6 +80,19 @@ function SetGPIOModeAndLevel(handle, pin, mode, level, onTransferResult) {
   ControlOut(handle, 0x23 /* Get_GPIO_Mode_And_Level */, buf, onTransferResult);
 }
 
+function GetClockDivider(handle, onTransferResult) {
+  ControlIn(handle, 0x46 /* Get_Clock_Divider */, 1, onTransferResult);
+}
+
+// GPIO.5 Clock Frequency = 24MHz / clockDivider
+// clockDivider value of 0 means 256.
+function SetClockDivider(handle, clockDivider, onTransferResult) {
+  var buf = new ArrayBuffer(1);
+  var bufView = new Uint8Array(buf);
+  bufView[0] = clockDivider;
+  ControlOut(handle, 0x47 /* Set_Clock_Divider */, buf, onTransferResult);
+}
+
 function GetSPIWord(handle, onTransferResult) {
   ControlIn(handle, 0x30 /* Get_SPI_Word */, 0x0b, onTransferResult);
 }

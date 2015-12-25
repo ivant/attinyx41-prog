@@ -63,6 +63,23 @@ function SetGPIOChipSelect(handle, channel, control, onTransferResult) {
   ControlOut(handle, 0x25 /* Set_GPIO_ChipSelect */, buf, onTransferResult);
 }
 
+function GetGPIOModeAndLevel(handle, onTransferResult) {
+  ControlIn(handle, 0x22 /* Get_GPIO_Mode_And_Level */, 4, onTransferResult);
+}
+
+var CP2130_PIN_MODE_INPUT = 0x00;
+var CP2130_PIN_MODE_OPEN_DRAIN_OUTPUT = 0x01;
+var CP2130_PIN_MODE_PUSH_PULL_OUTPUT = 0x02;
+
+function SetGPIOModeAndLevel(handle, pin, mode, level, onTransferResult) {
+  var buf = new ArrayBuffer(3);
+  var bufView = new Uint8Array(buf);
+  bufView[0] = pin;
+  bufView[1] = mode;
+  bufView[2] = level;
+  ControlOut(handle, 0x23 /* Get_GPIO_Mode_And_Level */, buf, onTransferResult);
+}
+
 function GetSPIWord(handle, onTransferResult) {
   ControlIn(handle, 0x30 /* Get_SPI_Word */, 0x0b, onTransferResult);
 }

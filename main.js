@@ -133,15 +133,23 @@ function UploadSREC(clickEvent) {
     entry.file(function(file) {
       var reader = new FileReader();
       reader.onloadend = function(e) {
+        srec = ParseSREC(reader.result);
+        if (!srec) {
+          showError('Failed to parse SREC file');
+          return;
+        }
+
         SetupSPIChannel(deviceHandle, 0, SPIWriteSomething);
-        SPIWrite(deviceHandle, new Uint8Array(reader.result), function(transferResult) {
+
+        // For now, as a test, just write out the first record.
+        SPIWrite(deviceHandle, new Uint8Array(srec['records'][0]['data']), function(transferResult) {
           if (chrome.runtime.lastError !== undefined) {
             showError('SPIWrite error: ' + chrome.runtime.lastError.message);
             return;
           }
         });
       };
-      reader.readAsArrayBuffer(file);
+      reader.readAsText(file);
     });
   });
 }

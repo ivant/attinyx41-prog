@@ -25,16 +25,6 @@ function showError(error) {
   errorDiv.style['display'] = 'block';
 }
 
-function SPIWriteSomething() {
-  var data = Uint8Array.of(0x8c, 0xef, 0x13, 0x7f);
-  SPIWrite(deviceHandle, data, function(transferResult) {
-    if (chrome.runtime.lastError !== undefined) {
-      showError('SPIWrite error: ' + chrome.runtime.lastError.message);
-      return;
-    }
-  });
-}
-
 function SetGPIOValuesInCycle() {
   SetGPIOValues(deviceHandle, [0x00, 0x00], [0x08, 0x00], function(transferResult) {
     if (chrome.runtime.lastError !== undefined) {
@@ -138,8 +128,6 @@ function UploadSREC(clickEvent) {
           showError('Failed to parse SREC file');
           return;
         }
-
-        SetupSPIChannel(deviceHandle, 0, SPIWriteSomething);
 
         // For now, as a test, just write out the first record.
         SPIWriteRead(deviceHandle, new Uint8Array(srec['records'][0]['data']), function(transferResult) {

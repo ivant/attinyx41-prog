@@ -3,6 +3,11 @@ function ATtinyX41UploadFirmware(handle, srec) {
     console.error(message);
     return showError(message);
   };
+
+  if (!IsValidSREC(srec)) {
+    return onError("ATtinyX41UploadFirmware: Invalid SREC.");
+  }
+
   ATtinyX41ProgrammingEnableAtHighestSpeed(handle, 7, /* onSuccess */ function() {
     console.log("Ready to program.");
   }, /* onSyncError */ function() {

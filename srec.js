@@ -106,3 +106,34 @@ function ParseSREC(srecText) {
     'records': records
   };
 }
+
+function IsValidSREC(srec) {
+  let records = srec['records'];
+  if (!records || !Array.isArray(records)) {
+    console.debug('Invalid SREC: no records array');
+    return false;
+  }
+  let address = 0;
+  for (let record of records) {
+    let recordAddress = record['address'];
+    if (recordAddress === undefined || recordAddress === null) {
+      console.debug('Invalid SREC: record has no address');
+      return false;
+    }
+    if (recordAddress < address) {
+      console.debug('Invalid SREC: addresses are non-increasing');
+      return false;
+    }
+    let recordData = record['data'];
+    if (!recordData || !(recordData instanceof ArrayBuffer)) {
+      console.debug('Invalid SREC: record has no data');
+      return false;
+    }
+    if(recordData.byteLength === 0) {
+      console.debug('Invalid SREC: record data has size of 0');
+      return false;
+    }
+    address = recordAddress + recordData.byteLength;
+  }
+  return true;
+}

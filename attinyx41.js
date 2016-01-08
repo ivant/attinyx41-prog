@@ -1,3 +1,5 @@
+"use strict";
+
 function ATtinyX41UploadFirmware(handle, srec) {
   var onError = function(message) {
     console.error(message);
@@ -13,6 +15,71 @@ function ATtinyX41UploadFirmware(handle, srec) {
   }, /* onSyncError */ function() {
     return onError("Failed to sync with the device.");
   }, /* onUsbError */ onError);
+}
+
+// Page size: 8 words (16 bytes).
+// Number of pages: 256 (ATtiny441) / 512 (ATtiny841).
+//
+// Disallows records starting at odd offsets or having odd lengths.
+//
+// Since SREC is recorded in terms of bytes, and ATtiny assembly is word-based,
+// we need to know whether SREC is recorded in little-endian or big-endian
+// fashion.
+//
+// Returns: [{
+//   pageWordAddress: <uint16>,
+//   data: [{
+//     wordOffsetInPage: <uint8>,
+//     value: <uint16>
+//   }]
+// }]
+function ATtinyX41SplitSRECIntoPages(srec, bigEndian) {
+  var pageSizeInWords = 8;
+  var wordSize = 2;
+  var pageSizeInBytes = pageSizeInWords * wordSize;
+
+  var msbOffset = (bigEndian ? 0 : 1);
+  var ReadWordAt = function (arr, byteOffset) {
+    return (arr[byteOffset + msbOffset] << 8) + arr[byteOffset + (1 - msbOffset)];
+  };
+
+  var pages = [];
+  var pageByteAddress = 0;
+  var pageData = [];
+
+  var FlushPage = function() {
+    if (pageData.length > 0) {
+      pages.push({
+        pageWordAddress: pageByteAddress / wordSize,
+        data: pageData
+      });
+      pageData = [];
+    }
+  }
+
+  for (let record of srec['records']) {
+    let address = record['address']; 
+    let bytes = record['bytes']; 
+    if ((address & 1) || (bytes.length & 1)) {
+      console.error("ATtinyX41: records at odd offsets or having odd lengths are not supported.");
+      return undefined;
+    }
+    let offset = 0;
+    while (offset < bytes.length) {
+      let byteOffsetInPage = (address + offset) % pageSizeInBytes;
+      if ((address + offset) >= pageByteAddress + pageSizeInBytes) {
+        FlushPage();
+        pageByteAddress = (address + offset) - byteOffsetInPage;
+      }
+      pageData.push({
+        wordOffsetInPage: byteOffsetInPage / wordSize,
+        value: ReadWordAt(bytes, offset)
+      });
+      offset += 2;
+    }
+  }
+  FlushPage();
+  return pages;
 }
 
 function ATtinyX41PulseResetPin(handle, pin, pulseValue, lengthMs, onSuccess, onUsbError) {

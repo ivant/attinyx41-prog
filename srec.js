@@ -1,3 +1,5 @@
+"use strict";
+
 function ArrayBufToString(arrayBuf) {
   return new TextDecoder("utf-8").decode(new DataView(arrayBuf));
 }
@@ -6,11 +8,11 @@ function ArrayBufToString(arrayBuf) {
 //
 // Returns object:
 // {
-//   'header': header,
-//   'records': [
+//   header: header,
+//   records: [
 //     {
-//       'address': address,
-//       'data': arraybuf
+//       address: address,
+//       bytes: uint8array
 //     },
 //     ...
 //   ]
@@ -46,9 +48,9 @@ function ParseSREC(srecText) {
     var addr = parseInt(addrAndData.slice(0, addrLen), 16);
     var bytes = new Uint8Array(addrAndDataBytes.slice(addrLen / 2));
     return {
-      'type': type,
-      'address': addr,
-      'bytes': bytes
+      type: type,
+      address: addr,
+      bytes: bytes
     };
   };
 
@@ -63,20 +65,21 @@ function ParseSREC(srecText) {
     if (dataSize === 0) return;
     var recordData = new Uint8Array(dataSize);
     records.push({
-      'address': currentRecordStart,
-      'data': recordData.buffer
+      address: currentRecordStart,
+      bytes: recordData
     });
     var pieceOffset = 0;
-    currentDataArrays.forEach(function(byteArray) {
+    for (let byteArray of currentDataArrays) {
       recordData.set(byteArray, pieceOffset);
       pieceOffset += byteArray.length;
       currentRecordStart += byteArray.length;
-    });
+    }
     currentDataArrays = [];
   };
 
   var error = false;
-  var lines = srecText.split(/\r\n|\r(?!\n)|\n/).forEach(function(line) {
+  var lines = srecText.split(/\r\n|\r(?!\n)|\n/);
+  lines.forEach(function(line) {
     if (error) return;
     var srec = ParseSingleLine(line);
     if (!srec) return;
@@ -99,11 +102,12 @@ function ParseSREC(srecText) {
     currentDataArrays.push(bytes);
     currentAddr += bytes.length;
   });
+
   FlushDataArrays();
   if (error) return undefined;
   return {
-    'header': header,
-    'records': records
+    header: header,
+    records: records
   };
 }
 
@@ -125,7 +129,7 @@ function IsValidSREC(srec) {
       return false;
     }
     let recordData = record['data'];
-    if (!recordData || !(recordData instanceof ArrayBuffer)) {
+    if (!recordData || !(recordData instanceof Uint8Array)) {
       console.debug('Invalid SREC: record has no data');
       return false;
     }

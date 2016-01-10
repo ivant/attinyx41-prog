@@ -128,7 +128,7 @@ function IsValidSREC(srec) {
       console.debug('Invalid SREC: addresses are non-increasing');
       return false;
     }
-    let recordData = record['data'];
+    let recordData = record['bytes'];
     if (!recordData || !(recordData instanceof Uint8Array)) {
       console.debug('Invalid SREC: record has no data');
       return false;

@@ -1,10 +1,10 @@
 "use strict";
 
 function ATtinyX41UploadFirmware(handle, srec) {
-  var onError = function(message) {
+  function onError(message) {
     console.error(message);
     return showError(message);
-  };
+  }
 
   if (!IsValidSREC(srec)) {
     return onError("ATtinyX41UploadFirmware: Invalid SREC.");
@@ -12,6 +12,13 @@ function ATtinyX41UploadFirmware(handle, srec) {
 
   ATtinyX41ProgrammingEnableAtHighestSpeed(handle, 7, /* onSuccess */ function() {
     console.log("Ready to program.");
+    let pages = ATtinyX41SplitSRECIntoPages(srec, true /*bigEndian*/);
+    ATtinyX41WriteManyPages(handle, pages, function() {
+      // Set /RESET to 1.
+      SetGPIOModeAndLevel(handle, 7, CP2130_PIN_MODE_OPEN_DRAIN_OUTPUT, 1, function() {
+        console.log("Successfully uploaded firmware.");
+      }, onError);
+    }, onError);
   }, /* onSyncError */ function() {
     return onError("Failed to sync with the device.");
   }, /* onUsbError */ onError);
@@ -39,15 +46,15 @@ function ATtinyX41SplitSRECIntoPages(srec, bigEndian) {
   var pageSizeInBytes = pageSizeInWords * wordSize;
 
   var msbOffset = (bigEndian ? 0 : 1);
-  var ReadWordAt = function (arr, byteOffset) {
+  function ReadWordAt(arr, byteOffset) {
     return (arr[byteOffset + msbOffset] << 8) + arr[byteOffset + (1 - msbOffset)];
-  };
+  }
 
   var pages = [];
   var pageByteAddress = 0;
   var pageData = [];
 
-  var FlushPage = function() {
+  function FlushPage() {
     if (pageData.length > 0) {
       pages.push({
         pageWordAddress: pageByteAddress / wordSize,
@@ -99,28 +106,6 @@ function ATtinyX41PulseResetPin(handle, pin, pulseValue, lengthMs, onSuccess, on
   });
 }
 
-function ATtinyX41ProgrammingEnable(handle, onSuccess, onSyncError, onUsbError) {
-  // Send 'Programming Enable'.
-  SPIWriteRead(handle, new Uint8Array([0xAC, 0x53, 0x00, 0x00]), function(transferResult) {
-    if (chrome.runtime.lastError !== undefined) {
-      return onUsbError(chrome.runtime.lastError.message);
-    }
-
-    var response = new Uint8Array(transferResult.data);
-    if (response.length != 4) {
-      return onUsbError('SPIWriteRead(Programming Enable) error: unexpected response length: ' + response.length);
-    }
-
-    // ATtinyX41 responds with the second transmitted byte (0x53) repeated in
-    // the third byte of the response on successful sync.
-    if (response[2] != 0x53) {
-      return onSyncError();
-    }
-
-    return onSuccess();
-  });
-}
-
 function ATtinyX41ProgrammingEnableAtHighestSpeed(handle, nResetPin, onSuccess, onSyncError, onUsbError) {
   // SPI clock frequency:
   // freq = 12 MHz / 2^x, where x is 0..7
@@ -128,7 +113,7 @@ function ATtinyX41ProgrammingEnableAtHighestSpeed(handle, nResetPin, onSuccess, 
   // Since the search space is rather small we can do a naive linear search
   // from the highest frequency towards the lowest.
 
-  var TryFrequency = function(freqValue) {
+  function TryFrequency(freqValue) {
     if (freqValue < 0 || freqValue > 7) {
       return onSyncError();
     }
@@ -149,4 +134,108 @@ function ATtinyX41ProgrammingEnableAtHighestSpeed(handle, nResetPin, onSuccess, 
   };
 
   TryFrequency(0);
+}
+
+// Sends commandBytes over SPI, reads the response bytes, calls onSuccess with
+// the Uint8Array of the response as argument.
+function ATtinyX41SendSerialProgrammingInstruction(handle, commandBytes, onSuccess, onUsbError) {
+  SPIWriteRead(handle, new Uint8Array(commandBytes), function(transferResult) {
+    if (chrome.runtime.lastError !== undefined) {
+      return onUsbError(chrome.runtime.lastError.message);
+    }
+
+    var response = new Uint8Array(transferResult.data);
+    if (response.length != commandBytes.length) {
+      return onUsbError('SPIWriteRead error: unexpected response length, expected: ' + commandBytes.length + ', actual: ' + response.length);
+    }
+
+    return onSuccess(response);
+  });
+}
+
+function ATtinyX41ProgrammingEnable(handle, onSuccess, onSyncError, onUsbError) {
+  // Send 'Programming Enable'.
+  ATtinyX41SendSerialProgrammingInstruction(handle, [0xAC, 0x53, 0x00, 0x00], function(response) {
+    // ATtinyX41 responds with the second transmitted byte (0x53) repeated in
+    // the third byte of the response on successful sync.
+    if (response[2] != 0x53) {
+      return onSyncError();
+    }
+
+    return onSuccess();
+  }, onUsbError);
+}
+
+// Polls for RDY, calls onSuccess with a true in case the result is "ready".
+function ATtinyX41PollRDY(handle, onSuccess, onUsbError) {
+  // Send 'Poll RDY'.
+  ATtinyX41SendSerialProgrammingInstruction(handle, [0xF0, 0x00, 0x00, 0x00], function(response) {
+    // LSB is 0 if RDY, 1 otherwise.
+    return onSuccess((response[3] & 1) === 0);
+  }, onUsbError);
+}
+
+// Polls for RDY continuously, calls onReady once RDY is reported.
+function ATtinyX41PollUntilRDY(handle, onReady, onUsbError) {
+  // Send 'Poll RDY'.
+  ATtinyX41PollRDY(handle, function(isReady) {
+    if (isReady) return onReady();
+    return ATtinyX41PollUntilRDY(handle, onReady, onUsbError);
+  }, onUsbError);
+}
+
+function ATtinyX41LoadWord(handle, wordAddress, word, onSuccess, onUsbError) {
+  let addrLSB = wordAddress & 0x3f;  // bottom 6 bits.
+  let high = (word >> 8) & 0xff;
+  let low = word & 0xff;
+  function loadLow(onLoadSuccess) {
+    if (low != 0xff) {
+      return ATtinyX41SendSerialProgrammingInstruction(handle, [0x40, 0x00, addrLSB, low], function(response) {
+        onLoadSuccess();
+      }, onUsbError);
+    }
+    return onLoadSuccess();
+  }
+
+  function loadHigh(onLoadSuccess) {
+    if (high != 0xff) {
+      return ATtinyX41SendSerialProgrammingInstruction(handle, [0x48, 0x00, addrLSB, high], function(response) {
+        onLoadSuccess();
+      }, onUsbError);
+    }
+    return onLoadSuccess();
+  }
+  return loadLow(function() { return loadHigh(onSuccess); });
+}
+
+function ATtinyX41WritePage(handle, pageWordAddress, onSuccess, onUsbError) {
+  let addrMSB = (pageWordAddress >> 8) & 0xff;
+  let addrLSB = pageWordAddress & 0xff;
+  ATtinyX41SendSerialProgrammingInstruction(handle, [0x4C, addrMSB, addrLSB, 0x00], function(response) {
+    onSuccess();
+  }, onUsbError);
+}
+
+function ATtinyX41WriteManyPages(handle, pages, onSuccess, onUsbError) {
+  if (pages.length === 0) {
+    return ATtinyX41PollUntilRDY(handle, onSuccess, onUsbError);
+  }
+
+  function LoadWords(pageWordAddress, words, onSuccess) {
+    if (words.length === 0) return onSuccess();
+    let word = words[0];
+    ATtinyX41LoadWord(handle, pageWordAddress + word.wordOffsetInPage, word.value, function() {
+      LoadWords(pageWordAddress, words.slice(1), onSuccess);
+    }, onUsbError);
+  }
+
+  ATtinyX41PollUntilRDY(handle, function() {
+    let page = pages[0];
+    LoadWords(page['pageWordAddress'], page['data'], function() {
+      ATtinyX41WritePage(handle, page.pageWordAddress, function() {
+        console.debug('Wrote page @', page['pageWordAddress']);
+        ATtinyX41WriteManyPages(handle, pages.slice(1), onSuccess, onUsbError);
+      }, onUsbError);
+    });
+  }, onUsbError);
 }

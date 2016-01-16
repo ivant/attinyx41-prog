@@ -239,3 +239,31 @@ function ATtinyX41WriteManyPages(handle, pages, onSuccess, onUsbError) {
     });
   }, onUsbError);
 }
+
+function ATtinyX41ReadMemoryRange(handle, wordAddress, numWords, onSuccess, onUsbError) {
+  if (numWords === 0) return onSuccess([]);
+
+  let commands = [];
+  for (let offset = 0; offset < numWords; ++offset) {
+    let addrMSB = ((wordAddress + offset) >> 8) & 0xff;
+    let addrLSB = (wordAddress + offset) & 0xff;
+    commands.push(
+        0x20, addrMSB, addrLSB, 0x00,
+        0x28, addrMSB, addrLSB, 0x00);
+  }
+
+  ATtinyX41SendSerialProgrammingInstruction(handle, commands, function(response) {
+    let words = [];
+    for (let i = 0; i < numWords; ++i) {
+      let word = response[i * 8 + 3] + (response[i * 8 + 7] << 8);
+      words.push(word);
+    }
+    return onSuccess(words);
+  }, onUsbError);
+}
+
+function ATtinyX41ReadWord(handle, wordAddress, onSuccess, onUsbError) {
+  ATtinyX41ReadMemoryRange(handle, wordAddress, 1, function(words) {
+    return onSuccess(words[0]);
+  }, onUsbError);
+}

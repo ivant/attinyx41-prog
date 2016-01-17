@@ -139,18 +139,7 @@ function ATtinyX41ProgrammingEnableAtHighestSpeed(handle, nResetPin, onSuccess, 
 // Sends commandBytes over SPI, reads the response bytes, calls onSuccess with
 // the Uint8Array of the response as argument.
 function ATtinyX41SendSerialProgrammingInstruction(handle, commandBytes, onSuccess, onUsbError) {
-  SPIWriteRead(handle, new Uint8Array(commandBytes), function(transferResult) {
-    if (chrome.runtime.lastError !== undefined) {
-      return onUsbError(chrome.runtime.lastError.message);
-    }
-
-    var response = new Uint8Array(transferResult.data);
-    if (response.length != commandBytes.length) {
-      return onUsbError('SPIWriteRead error: unexpected response length, expected: ' + commandBytes.length + ', actual: ' + response.length);
-    }
-
-    return onSuccess(response);
-  });
+  SPIWriteRead(handle, new Uint8Array(commandBytes), onSuccess, onUsbError);
 }
 
 function ATtinyX41ProgrammingEnable(handle, onSuccess, onSyncError, onUsbError) {

@@ -1,3 +1,5 @@
+"use strict";
+
 // SI CP2130 communication functions.
 //
 // See "AN792: CP2130 Interface Specification" for details.
@@ -119,25 +121,51 @@ function SPIWrite(handle, data, onTransferResult) {
   }, onTransferResult);
 }
 
-function SPIWriteRead(handle, data, onWriteReadResult) {
-  var buf = new ArrayBuffer(data.length + 8);
-  var bufView = new Uint8Array(buf);
+
+// On success calls onSuccess with a Uint8Array argument containing the response.
+function SPIWriteRead(handle, data, onSuccess, onUsbError) {
+  let buf = new ArrayBuffer(data.length + 8);
+  let bufView = new Uint8Array(buf);
   bufView.set(Uint8Array.of(0x00, 0x00, 0x02, 0x00), 0);
   bufView.set(Uint32Array.of(data.length), 4);  // little-endian
   bufView.set(data, 8);
+
+  let response = new Uint8Array(data.length);
+  let receivedBytes = 0;
+
+  function receiveData() {
+    chrome.usb.bulkTransfer(handle, {
+      'direction': 'in',
+      'endpoint': 2,
+      'length': (response.length - receivedBytes)
+    }, function(transferResult) {
+      if (chrome.runtime.lastError !== undefined) {
+        return onUsbError(chrome.runtime.lastError.message);
+      }
+      if (transferResult.resultCode !== 0) {
+        return onUsbError('chrome.usb.bulkTransfer returned ' + transferResult.resultCode);
+      }
+
+      response.set(new Uint8Array(transferResult.data), receivedBytes);
+      receivedBytes += transferResult.data.byteLength;
+
+      if (response.length - receivedBytes > 0) return receiveData();
+      onSuccess(response);
+    });
+  }
+
   chrome.usb.bulkTransfer(handle, {
     'direction': 'out',
     'endpoint': 1,
     'data': buf
-  }, function(result) {
-    if (result.resultCode !== 0) {
-      onWriteReadResult(result);
-      return;
+  }, function(transferResult) {
+    if (chrome.runtime.lastError !== undefined) {
+      return onUsbError(chrome.runtime.lastError.message);
     }
-    chrome.usb.bulkTransfer(handle, {
-      'direction': 'in',
-      'endpoint': 2,
-      'length': data.length
-    }, onWriteReadResult);
+    if (transferResult.resultCode !== 0) {
+      return onUsbError('chrome.usb.bulkTransfer returned ' + transferResult.resultCode);
+    }
+
+    receiveData();
   });
 }

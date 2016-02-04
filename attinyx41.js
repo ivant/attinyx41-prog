@@ -13,10 +13,12 @@ function ATtinyX41UploadFirmware(handle, srec) {
   ATtinyX41ProgrammingEnableAtHighestSpeed(handle, 7, /* onSuccess */ function() {
     console.log("Ready to program.");
     let pages = ATtinyX41SplitSRECIntoPages(srec, true /*bigEndian*/);
-    ATtinyX41WriteManyPages(handle, pages, function() {
-      // Set /RESET to 1.
-      SetGPIOModeAndLevel(handle, 7, CP2130_PIN_MODE_OPEN_DRAIN_OUTPUT, 1, function() {
-        console.log("Successfully uploaded firmware.");
+    ATtinyX41ChipErase(handle, function() {
+      ATtinyX41WriteManyPages(handle, pages, function() {
+        // Set /RESET to 1.
+        SetGPIOModeAndLevel(handle, 7, CP2130_PIN_MODE_OPEN_DRAIN_OUTPUT, 1, function() {
+          console.log("Successfully uploaded firmware.");
+        }, onError);
       }, onError);
     }, onError);
   }, /* onSyncError */ function() {
@@ -265,5 +267,11 @@ function ATtinyX41ReadMemoryRange(handle, wordAddress, numWords, onSuccess, onUs
 function ATtinyX41ReadWord(handle, wordAddress, onSuccess, onUsbError) {
   ATtinyX41ReadMemoryRange(handle, wordAddress, 1, function(words) {
     return onSuccess(words[0]);
+  }, onUsbError);
+}
+
+function ATtinyX41ChipErase(handle, onSuccess, onUsbError) {
+  ATtinyX41SendSerialProgrammingInstruction(handle, [0xAC, 0x80, 0x00, 0x00], function(response) {
+    return onSuccess();
   }, onUsbError);
 }

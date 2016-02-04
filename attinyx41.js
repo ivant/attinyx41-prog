@@ -230,25 +230,36 @@ function ATtinyX41WriteManyPages(handle, pages, onSuccess, onUsbError) {
 }
 
 function ATtinyX41ReadMemoryRange(handle, wordAddress, numWords, onSuccess, onUsbError) {
-  if (numWords === 0) return onSuccess([]);
+  let words = [];
+  let maxWordsPerRound = 31;
 
-  let commands = [];
-  for (let offset = 0; offset < numWords; ++offset) {
-    let addrMSB = ((wordAddress + offset) >> 8) & 0xff;
-    let addrLSB = (wordAddress + offset) & 0xff;
-    commands.push(
-        0x20, addrMSB, addrLSB, 0x00,
-        0x28, addrMSB, addrLSB, 0x00);
-  }
+  let readMemoryRangeInternal = function(wordAddress, numWords) {
+    if (numWords === 0) return onSuccess(words);
 
-  ATtinyX41SendSerialProgrammingInstruction(handle, commands, function(response) {
-    let words = [];
-    for (let i = 0; i < numWords; ++i) {
-      let word = response[i * 8 + 3] + (response[i * 8 + 7] << 8);
-      words.push(word);
+    let numWordsThisRound = Math.min(maxWordsPerRound, numWords);
+    let numWordsNextTime = numWords - numWordsThisRound;
+
+    let commands = [];
+    for (let offset = 0; offset < numWordsThisRound; ++offset) {
+      let addrMSB = ((wordAddress + offset) >> 8) & 0xff;
+      let addrLSB = (wordAddress + offset) & 0xff;
+      commands.push(
+          0x20, addrMSB, addrLSB, 0x00,
+          0x28, addrMSB, addrLSB, 0x00);
     }
-    return onSuccess(words);
-  }, onUsbError);
+
+    return ATtinyX41SendSerialProgrammingInstruction(handle, commands, function(response) {
+      for (let i = 0; i < numWordsThisRound; ++i) {
+        let word = response[i * 8 + 3] + (response[i * 8 + 7] << 8);
+        words.push(word);
+      }
+      if (numWordsNextTime > 0) {
+        return readMemoryRangeInternal(wordAddress + numWordsThisRound, numWordsNextTime);
+      }
+      return onSuccess(words);
+    }, onUsbError);
+  };
+  return readMemoryRangeInternal(wordAddress, numWords);
 }
 
 function ATtinyX41ReadWord(handle, wordAddress, onSuccess, onUsbError) {
